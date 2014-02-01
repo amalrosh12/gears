@@ -1,5 +1,6 @@
 import gzip
 import os
+from glob2.fnmatch import fnmatch
 
 from .asset_attributes import AssetAttributes
 from .assets import build_asset
@@ -12,7 +13,7 @@ from .processors import (
     HexdigestPathsProcessor,
     SemicolonsProcessor
 )
-from .utils import get_condition_func
+from .utils import get_condition_func, unique
 
 
 DEFAULT_PUBLIC_ASSETS = (
@@ -41,6 +42,11 @@ class Finders(list):
         """
         if finder in self:
             self.remove(finder)
+
+    def list(self, path):
+        for finder in self:
+            for item in finder.list(path):
+                yield item
 
 
 class MIMETypes(dict):
@@ -346,15 +352,30 @@ class Environment(object):
             # 'application/javascript' MIME type of compiled source code.
             environment.list('js/templates/*', mimetype='application/javascript')
         """
-        found = set()
-        for finder in self.finders:
-            for logical_path, absolute_path in finder.list(path):
-                asset_attributes = AssetAttributes(self, logical_path)
-                if mimetype is not None and asset_attributes.mimetype != mimetype:
-                    continue
-                if logical_path not in found:
-                    yield asset_attributes, absolute_path
-                    found.add(logical_path)
+        basename_pattern = os.path.basename(path)
+
+        if path.endswith('**'):
+            paths = [path]
+        else:
+            paths = AssetAttributes(self, path).search_paths
+        paths = map(lambda p: p if p.endswith('*') else p + '*', paths)
+
+        results = unique(self._list_paths(paths), lambda x: x[0])
+        for logical_path, absolute_path in results:
+            asset_attributes = AssetAttributes(self, logical_path)
+            if mimetype is not None and asset_attributes.mimetype != mimetype:
+                continue
+
+            basename = os.path.basename(asset_attributes.path_without_suffix)
+            if not fnmatch(basename, basename_pattern) and basename != 'index':
+                continue
+
+            yield asset_attributes, absolute_path
+
+    def _list_paths(self, paths):
+        for path in paths:
+            for result in self.finders.list(path):
+                yield result
 
     def save(self):
         """Save handled public assets to :attr:`root` directory."""
