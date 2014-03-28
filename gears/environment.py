@@ -17,9 +17,9 @@ from .utils import get_condition_func
 
 
 DEFAULT_PUBLIC_ASSETS = (
-    lambda path: not any(path.endswith(ext) for ext in ('.css', '.js')),
-    r'^css/style\.css$',
-    r'^js/script\.js$',
+    #lambda path: not any([path.endswith(ext) for ext in ('.css', '.js')]),
+    'css/\w+\.css',
+    'js/\w+\.js',
 )
 
 
@@ -349,7 +349,7 @@ class Environment(object):
         if isinstance(item, AssetAttributes):
             for path in item.search_paths:
                 try:
-                    return self.find(path, logical)
+                    return self.find(path, logical=True)
                 except FileNotFound:
                     continue
             raise FileNotFound(item.path)
@@ -428,4 +428,4 @@ class Environment(object):
                 f.write(source)
 
     def is_public(self, logical_path):
-        return any(condition(logical_path) for condition in self.public_assets)
+        return any([condition(logical_path) for condition in self.public_assets])
